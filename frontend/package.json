@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "leaflet": "latest",
-    "next": "latest",
+    "next": "^16.2.6",
     "react": "latest",
     "react-dom": "latest",
     "react-leaflet": "latest",

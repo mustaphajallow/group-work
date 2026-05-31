@@ -8,13 +8,13 @@ import {
   AreaChart,
   CartesianGrid,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { useStatisticsData, usePredictionData, useMonthlyData } from "./components/analysisHooks";
 import DashboardShell from "./components/DashboardShell";
+import SafeResponsiveChart from "./components/SafeResponsiveChart";
 import { useDashboardData, useDerivedMetrics } from "./components/dashboardData";
 
 const RainfallMap = dynamic(() => import("./components/RainfallMap"), {
@@ -170,8 +170,7 @@ export default function HomePage(): ReactElement {
             <h3 className="text-lg font-bold text-gray-800">Monthly Trend</h3>
             <p className="text-xs text-gray-500">{monthlySeries.length} monthly points</p>
           </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <SafeResponsiveChart height={288}>
               <AreaChart data={monthlySeries}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" hide />
@@ -180,14 +179,12 @@ export default function HomePage(): ReactElement {
                 <Area type="monotone" dataKey="total_rainfall_mm" stroke="#2563eb" fill="#bfdbfe" />
                 <Line type="monotone" dataKey="rolling_3mo_avg_mm" stroke="#0f766e" dot={false} />
               </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          </SafeResponsiveChart>
         </div>
 
         <div className="min-w-0 rounded-lg bg-white p-6 shadow">
           <h3 className="mb-4 text-lg font-bold text-gray-800">Seasonal Mean vs Median</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <SafeResponsiveChart height={288}>
               <AreaChart data={seasonalRows}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -196,8 +193,7 @@ export default function HomePage(): ReactElement {
                 <Area type="monotone" dataKey="mean" fill="#cffafe" stroke="#0891b2" />
                 <Line type="monotone" dataKey="median" stroke="#f97316" dot={false} />
               </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          </SafeResponsiveChart>
         </div>
       </div>
 
@@ -223,9 +219,11 @@ export default function HomePage(): ReactElement {
                   <tr key={idx} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-2">{`Point ${idx + 1}`}</td>
                     <td className="px-4 py-2 font-semibold">{row.rainfall_mm?.toFixed(2)} mm</td>
-                    <td className="px-4 py-2 text-xs">
-                      {row.latitude?.toFixed(2)}, {row.longitude?.toFixed(2)}
-                    </td>
+                      <td className="px-4 py-2 text-xs">
+                        {Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+                          ? `${row.latitude.toFixed(2)}, ${row.longitude.toFixed(2)}`
+                          : "Unavailable"}
+                      </td>
                   </tr>
                 ))}
               </tbody>

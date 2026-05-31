@@ -174,17 +174,31 @@ def build_monthly_datasets(records: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
         monthly_summary["total_rainfall_mm"].diff().fillna(0)
     )
 
-    monthly_by_location = (
-        working.groupby(["month", "latitude", "longitude"], as_index=False)
-        .agg(
-            total_rainfall_mm=("rainfall_mm", "sum"),
-            avg_rainfall_mm=("rainfall_mm", "mean"),
-            max_rainfall_mm=("rainfall_mm", "max"),
-            rainy_days=("rainfall_mm", lambda values: int((values > 0).sum())),
-            observation_count=("rainfall_mm", "size"),
+    if {"latitude", "longitude"}.issubset(working.columns):
+        monthly_by_location = (
+            working.groupby(["month", "latitude", "longitude"], as_index=False)
+            .agg(
+                total_rainfall_mm=("rainfall_mm", "sum"),
+                avg_rainfall_mm=("rainfall_mm", "mean"),
+                max_rainfall_mm=("rainfall_mm", "max"),
+                rainy_days=("rainfall_mm", lambda values: int((values > 0).sum())),
+                observation_count=("rainfall_mm", "size"),
+            )
+            .sort_values(["month", "total_rainfall_mm"], ascending=[True, False])
         )
-        .sort_values(["month", "total_rainfall_mm"], ascending=[True, False])
-    )
+    else:
+        monthly_by_location = pd.DataFrame(
+            columns=[
+                "month",
+                "latitude",
+                "longitude",
+                "total_rainfall_mm",
+                "avg_rainfall_mm",
+                "max_rainfall_mm",
+                "rainy_days",
+                "observation_count",
+            ]
+        )
 
     return monthly_summary, monthly_by_location
 
@@ -343,6 +357,10 @@ def load_data() -> None:
     if monthly_data_path.exists():
         monthly_df, monthly_location_df = load_monthly_data(monthly_data_path)
         logger.info("Monthly data loaded successfully")
+    elif df is not None and not df.empty:
+        logger.warning("Monthly data file not found; deriving monthly aggregates from the primary dataset.")
+        monthly_df, monthly_location_df = build_monthly_datasets(df)
+        logger.info("Derived monthly data from primary dataset")
     else:
         logger.warning("Monthly data file not found, monthly endpoints will be empty")
         monthly_df, monthly_location_df = pd.DataFrame(), pd.DataFrame()
@@ -373,7 +391,7 @@ def read_root() -> dict:
 
 
 @app.get("/api/summary")
-def read_summary(source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def read_summary(source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Return dataset summary values for the dashboard."""
     records = get_dataset(source)
     if records is None or records.empty:
@@ -410,7 +428,7 @@ def read_summary(source: str = Query(default="data", regex="^(data|data3)$")) ->
 def read_data(
     limit: int = Query(default=250, ge=1, le=5000),
     date: str | None = Query(default=None),
-    source: str = Query(default="data", regex="^(data|data3)$"),
+    source: str = Query(default="data", pattern="^(data|data3)$"),
 ) -> list[dict]:
     """Return rainfall rows for frontend display."""
     records = get_dataset(source)
@@ -425,7 +443,7 @@ def read_data(
 
 
 @app.get("/api/map")
-def read_map_data(date: str | None = Query(default=None), source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def read_map_data(date: str | None = Query(default=None), source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Return rainfall values for a selected date for map display."""
     records = get_dataset(source)
     if records is None or records.empty or source == "data3":
@@ -442,7 +460,7 @@ def read_map_data(date: str | None = Query(default=None), source: str = Query(de
 
 
 @app.get("/api/trends")
-def read_trends(source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def read_trends(source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Return daily aggregated rainfall metrics for charting pages."""
     records = get_dataset(source)
     if records is None or records.empty:
@@ -514,7 +532,7 @@ def read_monthly_data(month: str | None = Query(default=None), limit: int = Quer
 # ==================== STATISTICAL ANALYSIS ENDPOINTS ====================
 
 @app.get("/api/statistics/summary")
-def get_statistics_summary(source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def get_statistics_summary(source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Return comprehensive statistical summary of rainfall data."""
     records = get_dataset(source)
     if records is None or records.empty or 'rainfall_mm' not in records.columns:
@@ -548,7 +566,7 @@ def get_statistics_summary(source: str = Query(default="data", regex="^(data|dat
 def get_correlation_analysis(
     var1: str = Query(default="rainfall_mm"),
     var2: str = Query(default="latitude"),
-    source: str = Query(default="data", regex="^(data|data3)$")
+    source: str = Query(default="data", pattern="^(data|data3)$")
 ) -> dict:
     """Calculate correlation between two variables."""
     records = get_dataset(source)
@@ -595,7 +613,7 @@ def get_regression_analysis(
 
 
 @app.get("/api/statistics/seasonal")
-def get_seasonal_analysis(source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def get_seasonal_analysis(source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Analyze seasonal rainfall patterns."""
     records = get_dataset(source)
     if records is None or records.empty:
@@ -615,7 +633,7 @@ def get_seasonal_analysis(source: str = Query(default="data", regex="^(data|data
 # ==================== MACHINE LEARNING ENDPOINTS ====================
 
 @app.post("/api/ml/train")
-def train_prediction_model(source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def train_prediction_model(source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Train rainfall prediction model."""
     df_to_use = monthly_df if monthly_df is not None and not monthly_df.empty else df
     
@@ -702,7 +720,7 @@ def get_model_feature_importance() -> dict:
 # ==================== REPORT GENERATION ENDPOINTS ====================
 
 @app.get("/api/report/generate")
-def generate_analysis_report(source: str = Query(default="data", regex="^(data|data3)$")) -> dict:
+def generate_analysis_report(source: str = Query(default="data", pattern="^(data|data3)$")) -> dict:
     """Generate comprehensive rainfall analysis report."""
     records = get_dataset(source)
     
@@ -766,7 +784,7 @@ def generate_analysis_report(source: str = Query(default="data", regex="^(data|d
 
 
 @app.get("/api/report/export")
-def export_report(format: str = Query(default="json", regex="^(json|markdown)$")) -> dict:
+def export_report(format: str = Query(default="json", pattern="^(json|markdown)$")) -> dict:
     """Export analysis report in specified format."""
     try:
         report_result = report_gen.generate_full_report({})
